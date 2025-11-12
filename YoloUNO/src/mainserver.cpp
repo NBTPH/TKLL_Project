@@ -1,63 +1,47 @@
 #include "mainserver.h"
-#include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
 #include "global.h"
 
-// ====== Pin mapping ======
+// ====== Chọn chân LED thực tế của bạn ======
 #ifndef LED1_PIN
 #define LED1_PIN 48
 #endif
 
 #ifndef LED2_PIN
-#define LED2_PIN 47
+#define LED2_PIN 47   
 #endif
 
-#ifndef BOOT_PIN
-// ESP32/ESP32-S3 DevKit thường BOOT là GPIO0
-#define BOOT_PIN 0
-#endif
+bool led1_state = false;
+bool led2_state = false;
+bool isAPMode   = true;
 
-// ====== State ======
-static bool led1_state = false;
-static bool led2_state = false;
+WebServer server(80);
 
-// Giữ AP hoạt động song song STA để không rớt kết nối cấu hình
-static bool ap_enabled = false;
-static bool sta_enabled = false;
-static bool isAPMode   = true;      // Chỉ dùng để render UI (có thể bỏ nếu muốn dựa vào WiFi.status())
+String ssid = "Hacker_Binh";
+String password = "chianlo2352080";
+String wifi_ssid = "";
+String wifi_password = "";
 
-static String wifi_ssid     = "";
-static String wifi_password = "";
+unsigned long connect_start_ms = 0;
+bool connecting = false;
 
-// AP SSID/PASS (cổng cấu hình)
-static String ssid     = "Hacker_Binh";
-static String password = "chianlo2352080";
+bool ap_enabled = false;
+bool sta_enabled = false;
+IPAddress apIP(192, 168, 10, 1);
 
-static IPAddress apIP(192, 168, 10, 1);
+String mainPage() {
+  // --- dữ liệu runtime ---
+  float temperature = glob_temperature;
+  float humidity    = glob_humidity;
 
-static unsigned long connect_start_ms = 0;
-static bool connecting = false;
+  String ip = isAPMode ? WiFi.softAPIP().toString()
+                       : WiFi.localIP().toString();
+  String wifiName = isAPMode ? ssid : wifi_ssid;
 
-// ====== Globals từ nơi khác cập nhật (nếu cập nhật từ task/ISR, nên để volatile) ======
-extern float glob_temperature;  // đảm bảo có trong global.h
-extern float glob_humidity;
-
-// ====== HTTP Server ======
-static WebServer server(80);
-
-// ---------- HTML: Dashboard ----------
-static String mainPage() {
-  // runtime
-  const float temperature = glob_temperature;
-  const float humidity    = glob_humidity;
-
-  const String ip = isAPMode ? WiFi.softAPIP().toString()
-                             : WiFi.localIP().toString();
-  const String wifiName = isAPMode ? ssid : wifi_ssid;
-
-  const String led1Class = led1_state ? "btn on" : "btn off";
-  const String led2Class = led2_state ? "btn on" : "btn off";
+  // lớp CSS ban đầu cho nút LED (sync trạng thái lúc tải trang)
+  String led1Class = led1_state ? "btn on"  : "btn off";
+  String led2Class = led2_state ? "btn on"  : "btn off";
 
   return R"rawliteral(
 <!DOCTYPE html>
@@ -119,7 +103,7 @@ static String mainPage() {
     .ghost{ flex:1; border:1px dashed var(--glass); color:var(--text); background:transparent; border-radius:12px; padding:12px; cursor:pointer }
     .footer{ padding:10px 18px 18px; display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:12px }
     .badge{ padding:6px 10px; border-radius:999px; background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02)); border:1px solid var(--glass) }
-    .toast{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px); opacity:0; transition:.25s; padding:10px 14px; border-radius:12px; background:#000c; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.35); font-weight:700 }
+    .toast{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px); opacity:0; transition:.25s; padding:10px 14px; border-radius:12px; background:#000c; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.35); font-weight:600 }
     .toast.show{ opacity:1; transform:translateX(-50%) }
     .i{ width:18px; height:18px; display:inline-block; vertical-align:middle } .i svg{ width:18px; height:18px }
   </style>
@@ -154,6 +138,7 @@ static String mainPage() {
       </div>
 
       <div class="grid">
+        <!-- Temperature -->
         <div class="sensor" aria-live="polite">
           <div class="i" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -165,6 +150,7 @@ static String mainPage() {
           <div class="value"><span id="temp">)rawliteral" + String(temperature,1) + R"rawliteral(</span><span class="unit">°C</span></div>
         </div>
 
+        <!-- Humidity -->
         <div class="sensor" aria-live="polite">
           <div class="i" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -175,8 +161,9 @@ static String mainPage() {
           <div class="value"><span id="hum">)rawliteral" + String(humidity,0) + R"rawliteral(</span><span class="unit">%</span></div>
         </div>
 
+        <!-- LED controls -->
         <div class="leds" role="group" aria-label="LED controls">
-          <button id="btn1" class=")rawliteral" + (led1_state ? "btn on" : "btn off") + R"rawliteral(" onclick="toggleLED(1)">
+          <button id="btn1" class=")rawliteral" + led1Class + R"rawliteral(" onclick="toggleLED(1)">
             <span class="i" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 2v6"/><path d="M7 22h10"/><circle cx="12" cy="14" r="6"/>
@@ -184,7 +171,7 @@ static String mainPage() {
             </span>
             LED 1
           </button>
-          <button id="btn2" class=")rawliteral" + (led2_state ? "btn on" : "btn off") + R"rawliteral(" onclick="toggleLED(2)">
+          <button id="btn2" class=")rawliteral" + led2Class + R"rawliteral(" onclick="toggleLED(2)">
             <span class="i" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 2v6"/><path d="M7 22h10"/><circle cx="12" cy="14" r="6"/>
@@ -243,6 +230,7 @@ static String mainPage() {
         .catch(()=>toast('Lỗi tải cảm biến'));
     }
 
+    // auto refresh mỗi 3 giây
     setInterval(refreshSensors, 3000);
   </script>
 </body>
@@ -250,8 +238,8 @@ static String mainPage() {
 )rawliteral";
 }
 
-// ---------- HTML: Settings ----------
-static String settingsPage() {
+
+String settingsPage() {
   return R"rawliteral(
 <!DOCTYPE html>
 <html lang="vi">
@@ -286,6 +274,7 @@ static String settingsPage() {
     @keyframes pop{ from{ transform:translateY(8px) scale(.98); opacity:0 } to{ transform:none; opacity:1 } }
     h2{ margin:0 0 10px; font-size:22px; font-weight:800; letter-spacing:.2px }
     .sub{ color:var(--muted); font-size:13px; margin-bottom:18px }
+
     .field{ margin-bottom:14px }
     .label{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:13px; color:var(--muted); font-weight:600 }
     .input{
@@ -300,6 +289,7 @@ static String settingsPage() {
       user-select:none; cursor:pointer; font-size:12px; color:var(--muted);
       border:1px dashed var(--glass); padding:8px 10px; border-radius:10px;
     }
+
     .btn{
       width:100%; padding:14px; margin-top:8px; border:0; border-radius:14px; cursor:pointer;
       color:#fff; font-weight:800; letter-spacing:.2px; transition:.15s;
@@ -308,12 +298,15 @@ static String settingsPage() {
     .btn:active{ transform:translateY(1px) }
     .primary{ background:linear-gradient(180deg,var(--primary),#4f46e5); box-shadow:0 8px 20px rgba(99,102,241,.35) }
     .ghost{ background:transparent; color:var(--text); border:1px dashed var(--glass) }
+
     .msg{ margin-top:12px; font-size:14px; font-weight:700 }
     .ok{ color:var(--ok) } .err{ color:var(--bad) }
+
     .toast{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px);
             opacity:0; transition:.25s; padding:10px 14px; border-radius:12px; background:#000c;
             color:#fff; font-weight:700; box-shadow:0 6px 18px rgba(0,0,0,.35) }
     .toast.show{ opacity:1; transform:translateX(-50%) }
+
     .row{ display:flex; gap:10px; }
   </style>
 </head>
@@ -377,24 +370,20 @@ static String settingsPage() {
       msgEl.textContent = '';
       msgEl.className = 'msg';
 
-      // POST thay vì GET để không lộ mật khẩu trên URL
-      fetch('/connect', {
-        method: 'POST',
-        headers: {'Content-Type':'application/x-www-form-urlencoded'},
-        body: 'ssid='+encodeURIComponent(ssid)+'&pass='+encodeURIComponent(pass)
-      })
-      .then(r=>r.text())
-      .then(text=>{
-        const ok = /success|connected|ok|thành công|connecting/i.test(text);
-        msgEl.textContent = text;
-        msgEl.className = 'msg ' + (ok ? 'ok' : 'err');
-        showToast(ok ? 'Đã gửi – chờ ESP32 kết nối' : 'Kết nối thất bại');
-      })
-      .catch(()=>{
-        msgEl.textContent = 'Lỗi gửi yêu cầu!';
-        msgEl.className = 'msg err';
-        showToast('Có lỗi mạng');
-      });
+      fetch('/connect?ssid='+encodeURIComponent(ssid)+'&pass='+encodeURIComponent(pass))
+        .then(r=>r.text())
+        .then(text=>{
+          // Hiển thị phản hồi server
+          const ok = /success|connected|ok|thành công/i.test(text);
+          msgEl.textContent = text;
+          msgEl.className = 'msg ' + (ok ? 'ok' : 'err');
+          showToast(ok ? 'Đã gửi – vui lòng chờ ESP32 kết nối' : 'Kết nối thất bại');
+        })
+        .catch(()=>{
+          msgEl.textContent = 'Lỗi gửi yêu cầu!';
+          msgEl.className = 'msg err';
+          showToast('Có lỗi mạng');
+        });
     });
   </script>
 </body>
@@ -402,163 +391,123 @@ static String settingsPage() {
 )rawliteral";
 }
 
-// ---------- Handlers ----------
-static void handleRoot() {
-  server.send(200, "text/html; charset=utf-8", mainPage());
-}
 
-static void handleToggle() {
-  const int led = server.hasArg("led") ? server.arg("led").toInt() : 0;
+// ========== Handlers ==========
+void handleRoot() { server.send(200, "text/html", mainPage()); }
+
+void handleToggle() {
+  int led = server.arg("led").toInt();
 
   if (led == 1) {
     led1_state = !led1_state;
-    digitalWrite(LED1_PIN, led1_state ? HIGH : LOW);
+    digitalWrite(LED1_PIN, led1_state ? HIGH : LOW); // ✅ điều khiển thật
   } else if (led == 2) {
     led2_state = !led2_state;
-    digitalWrite(LED2_PIN, led2_state ? HIGH : LOW);
+    digitalWrite(LED2_PIN, led2_state ? HIGH : LOW); // ✅ điều khiển thật
   }
 
-  String json = String("{\"led1\":\"") + (led1_state ? "ON" : "OFF") +
-                "\",\"led2\":\"" + (led2_state ? "ON" : "OFF") + "\"}";
-  server.send(200, "application/json; charset=utf-8", json);
+  server.send(200, "application/json",
+    "{\"led1\":\"" + String(led1_state ? "ON":"OFF") +
+    "\",\"led2\":\"" + String(led2_state ? "ON":"OFF") + "\"}");
 }
 
-static void handleSensors() {
-  // Đọc an toàn: nếu glob_* được cập nhật từ task khác, cân nhắc critical section
-  String json = String("{\"temp\":") + String(glob_temperature, 1) +
-                ",\"hum\":" + String(glob_humidity, 0) + "}";
-  server.send(200, "application/json; charset=utf-8", json);
+void handleSensors() {
+  String json = "{\"temp\":"+String(glob_temperature,1)+",\"hum\":"+String(glob_humidity,0)+"}";
+  server.send(200, "application/json", json);
 }
 
-static void handleSettings() {
-  server.send(200, "text/html; charset=utf-8", settingsPage());
-}
+void handleSettings() { server.send(200, "text/html", settingsPage()); }
 
-static void handleConnect() {
-  // Hỗ trợ cả GET lẫn POST
-  const String ssidArg = server.hasArg("ssid") ? server.arg("ssid") : "";
-  const String passArg = server.hasArg("pass") ? server.arg("pass") : "";
-
-  if (ssidArg.isEmpty()) {
-    server.send(400, "text/plain; charset=utf-8", "SSID is required");
-    return;
-  }
-
-  wifi_ssid     = ssidArg;
-  wifi_password = passArg;
-
-  server.send(200, "text/plain; charset=utf-8", "Connecting....");
-
+void handleConnect() {
+  wifi_ssid     = server.arg("ssid");
+  wifi_password = server.arg("pass");
+  server.send(200, "text/plain", "Connecting....");
+  isAPMode   = false;
   connecting = true;
   connect_start_ms = millis();
-
-  WiFi.mode(WIFI_AP_STA); // giữ AP để người dùng không rớt kết nối
+  WiFi.mode(WIFI_STA);
   WiFi.begin(wifi_ssid.c_str(), wifi_password.c_str());
-
   Serial.print("Connecting to STA: ");
   Serial.println(wifi_ssid);
-
   sta_enabled = true;
 }
 
-// ---------- Routes ----------
-static void setupServer() {
-  server.on("/",          HTTP_GET, handleRoot);
-  server.on("/toggle",    HTTP_GET, handleToggle);
-  server.on("/sensors",   HTTP_GET, handleSensors);
-  server.on("/settings",  HTTP_GET, handleSettings);
-  server.on("/connect",   HTTP_ANY, handleConnect); // nhận cả POST/GET
-
-  server.onNotFound([](){
-    server.send(404, "text/plain; charset=utf-8", "Not Found");
-  });
-
+// ========== WiFi ==========
+void setupServer() {
+  server.on("/",        HTTP_GET, handleRoot);
+  server.on("/toggle",  HTTP_GET, handleToggle);
+  server.on("/sensors", HTTP_GET, handleSensors);
+  server.on("/settings",HTTP_GET, handleSettings);
+  server.on("/connect", HTTP_GET, handleConnect);
   server.begin();
 }
 
-// ---------- AP ----------
-static void startAP() {
+void startAP() {
   if (!ap_enabled) {
-    WiFi.mode(WIFI_AP_STA); // bật luôn AP+STA
+    WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(apIP, apIP, IPAddress(255,255,255,0));
     WiFi.softAP(ssid.c_str(), password.c_str());
     Serial.print("AP started. AP IP address: ");
     Serial.println(WiFi.softAPIP());
     ap_enabled = true;
   }
-  isAPMode = true; // dùng cho UI
+  isAPMode = true;
 }
 
-// ---------- WiFi Events ----------
-static void WiFiEvent(WiFiEvent_t event) {
+void WiFiEvent(WiFiEvent_t event) {
   switch (event) {
-    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-      Serial.println("✅ WiFi Connected (STA)!");
+    case SYSTEM_EVENT_STA_CONNECTED:
+      Serial.println("✅ WiFi Connected!");
       break;
-
-    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+    case SYSTEM_EVENT_STA_GOT_IP:
       Serial.print("📡 IP Address assigned: ");
       Serial.println(WiFi.localIP());
-      // Khi đã có IP STA, UI có thể coi là đang ở mode STA
-      isAPMode = false;
       break;
-
-    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+    case SYSTEM_EVENT_STA_DISCONNECTED:
       Serial.println("⚠️ WiFi disconnected. Trying to reconnect...");
       WiFi.reconnect();
       break;
-
-    default:
-      break;
+    default: break;
   }
 }
 
-// ---------- Task chính ----------
-void main_server_task(void *pvParameters) {
+void main_server_task(void *pvParameters){
   pinMode(BOOT_PIN, INPUT_PULLUP);
-
   pinMode(LED1_PIN, OUTPUT);
   pinMode(LED2_PIN, OUTPUT);
-  // Đồng bộ mức pin theo trạng thái ban đầu
-  digitalWrite(LED1_PIN, led1_state ? HIGH : LOW);
-  digitalWrite(LED2_PIN, led2_state ? HIGH : LOW);
+  digitalWrite(LED1_PIN, LOW);
+  digitalWrite(LED2_PIN, LOW);
 
-  // Khởi động AP + HTTP
   startAP();
   setupServer();
 
-  // Đăng ký WiFi events (Arduino core 2.x)
-  WiFi.onEvent(WiFiEvent);
-
-  // Vòng lặp dịch vụ
-  for (;;) {
+  while(1){
     server.handleClient();
 
-    // Nút BOOT để quay về AP (giữ AP_STA, chỉ đặt cờ hiển thị)
     if (digitalRead(BOOT_PIN) == LOW) {
       vTaskDelay(pdMS_TO_TICKS(100));
       if (digitalRead(BOOT_PIN) == LOW) {
-        startAP();     // đảm bảo AP đang bật
-        isAPMode = true;
-        // Không gọi lại setupServer()
+        if (!isAPMode) {
+          startAP();
+          setupServer();
+        }
       }
     }
 
-    // Theo dõi quá trình kết nối STA
     if (connecting) {
       if (WiFi.status() == WL_CONNECTED) {
         Serial.print("STA IP address: ");
         Serial.println(WiFi.localIP());
         isAPMode = false;
         connecting = false;
-      } else if (millis() - connect_start_ms > 10000UL) {
-        Serial.println("WiFi connect failed! Keeping AP.");
-        // Giữ WIFI_AP_STA để người dùng vẫn truy cập được settings
+      } else if (millis() - connect_start_ms > 10000) { 
+        Serial.println("WiFi connect failed! Back to AP.");
+        startAP();
+        setupServer();
         connecting = false;
-        isAPMode = true; // UI sẽ tiếp tục hiển thị theo AP
       }
     }
 
-    vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(pdMS_TO_TICKS(20)); 
   }
 }
