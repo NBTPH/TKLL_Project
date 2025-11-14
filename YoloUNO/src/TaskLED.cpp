@@ -1,4 +1,5 @@
 #include "TaskLED.h"
+#include "global.h"
 
 void TaskLED(void *pvParameter){
     pinMode(LED_PIN, OUTPUT);

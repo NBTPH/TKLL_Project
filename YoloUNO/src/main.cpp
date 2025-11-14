@@ -1,4 +1,3 @@
-#include "common.h"
 #include "TaskDHT20.h"
 #include "TaskLCD.h"
 #include "TaskLED.h"
@@ -18,7 +17,6 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT);
 
   DHT20_Mutex = xSemaphoreCreateMutex();
-  GLOB_Mutex = xSemaphoreCreateMutex();
   
   xTaskCreate(TaskDHT20, "DHT20", 2048, NULL, 2, NULL);
   xTaskCreate(TaskLCD, "LCD", 2048, NULL, 2, NULL);

@@ -6,7 +6,7 @@
 #include <PubSubClient.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-
+#include "TaskDHT20.h" 
 // ====== HIVE MQ CREDENTIALS ======
 static const char* HIVEMQ_HOST = "556cf1d3be9443d8be5699268d114bb9.s1.eu.hivemq.cloud";
 static const int   HIVEMQ_PORT = 8883;
@@ -32,13 +32,10 @@ static void mqtt_publish_status(const char* msg){
 
 static void mqtt_publish_sensors(){
   float t, h;
-  if (GLOB_Mutex && xSemaphoreTake(GLOB_Mutex, pdMS_TO_TICKS(5))) {
-    t = glob_temperature;
-    h = glob_humidity;
-    xSemaphoreGive(GLOB_Mutex);
-  } else {
-    t = glob_temperature; 
-    h = glob_humidity;
+  if (DHT20_Mutex && xSemaphoreTake(DHT20_Mutex, pdMS_TO_TICKS(5))) {
+    t = dht20.temp;
+    h = dht20.humidity;
+    xSemaphoreGive(DHT20_Mutex);
   }
 
   char buf[96];
@@ -54,7 +51,7 @@ static bool fetch_and_publish_weather(double lat, double lon){
                "&longitude=" + String(lon, 6) + "&current_weather=true";
 
   WiFiClientSecure https;
-  https.setInsecure(); // DEV: bỏ verify cert cho nhanh
+  https.setInsecure(); 
   HTTPClient http;
   if (!http.begin(https, url)) {
     mqtt.publish(MQTT_WEATHER_TOPIC, "{\"error\":\"http_begin_fail\"}", false);

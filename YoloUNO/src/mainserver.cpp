@@ -2,15 +2,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include "global.h"
-
-// ====== Chọn chân LED thực tế của bạn ======
-#ifndef LED1_PIN
-#define LED1_PIN 48
-#endif
-
-#ifndef LED2_PIN
-#define LED2_PIN 47   
-#endif
+#include "TaskDHT20.h" 
 
 bool led1_state = false;
 bool led2_state = false;
@@ -31,25 +23,27 @@ bool sta_enabled = false;
 IPAddress apIP(192, 168, 10, 1);
 
 String mainPage() {
-  // --- dữ liệu runtime ---
-  float temperature = glob_temperature;
-  float humidity    = glob_humidity;
+  float temperature = 0, humidity = 0;
+  if (DHT20_Mutex && xSemaphoreTake(DHT20_Mutex, pdMS_TO_TICKS(5))) {
+      temperature = dht20.temp;
+      humidity    = dht20.humidity;
+      xSemaphoreGive(DHT20_Mutex);
+  }
 
   String ip = isAPMode ? WiFi.softAPIP().toString()
                        : WiFi.localIP().toString();
   String wifiName = isAPMode ? ssid : wifi_ssid;
 
-  // lớp CSS ban đầu cho nút LED (sync trạng thái lúc tải trang)
   String led1Class = led1_state ? "btn on"  : "btn off";
   String led2Class = led2_state ? "btn on"  : "btn off";
 
   return R"rawliteral(
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ESP32 Smart Dashboard</title>
+  <title>HackerBinh</title>
   <style>
     :root{
       --bg1:#111827; --bg2:#1f2937; --primary:#6366f1; --accent:#22d3ee;
@@ -146,7 +140,7 @@ String mainPage() {
               <path d="M12 3v8.5a2.5 2.5 0 1 0 2 0V3"/>
             </svg>
           </div>
-          <div class="label">Nhiệt độ</div>
+          <div class="label">Temperature</div>
           <div class="value"><span id="temp">)rawliteral" + String(temperature,1) + R"rawliteral(</span><span class="unit">°C</span></div>
         </div>
 
@@ -157,7 +151,7 @@ String mainPage() {
               <path d="M12 2s7 7.3 7 12a7 7 0 0 1-14 0c0-4.7 7-12 7-12z"/>
             </svg>
           </div>
-          <div class="label">Độ ẩm</div>
+          <div class="label">Humidity</div>
           <div class="value"><span id="hum">)rawliteral" + String(humidity,0) + R"rawliteral(</span><span class="unit">%</span></div>
         </div>
 
@@ -188,13 +182,13 @@ String mainPage() {
       </div>
 
       <div class="footer">
-        <span class="badge">Cập nhật mỗi 3 giây</span>
+        <span class="badge">Auto refresh every 3 seconds</span>
         <span class="badge" id="status">● online</span>
       </div>
     </div>
   </div>
 
-  <div id="toast" class="toast" role="status" aria-live="polite">Đã cập nhật</div>
+  <div id="toast" class="toast" role="status" aria-live="polite">Updated</div>
 
   <script>
     function toast(msg){
@@ -216,7 +210,7 @@ String mainPage() {
       fetch('/toggle?led='+id)
         .then(r=>r.json())
         .then(j=>{ updateLEDs(j); toast('LED '+id+': '+(id===1?j.led1:j.led2)); })
-        .catch(()=>toast('Lỗi điều khiển LED'));
+        .catch(()=>toast('Failed to toggle LED'));
     }
 
     function refreshSensors(){
@@ -225,12 +219,12 @@ String mainPage() {
         .then(d=>{
           document.getElementById('temp').textContent = Number(d.temp).toFixed(1);
           document.getElementById('hum').textContent  = Math.round(Number(d.hum));
-          toast('Đã làm mới dữ liệu');
+          toast('Sensor data updated');
         })
-        .catch(()=>toast('Lỗi tải cảm biến'));
+        .catch(()=>toast('Failed to load sensor data'));
     }
 
-    // auto refresh mỗi 3 giây
+    // auto refresh every 3s
     setInterval(refreshSensors, 3000);
   </script>
 </body>
@@ -239,10 +233,11 @@ String mainPage() {
 }
 
 
+
 String settingsPage() {
   return R"rawliteral(
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -313,32 +308,32 @@ String settingsPage() {
 <body>
   <div class="card">
     <h2>Wi-Fi Settings</h2>
-    <div class="sub">Nhập SSID và mật khẩu để ESP32 kết nối mạng</div>
+    <div class="sub">Enter SSID and password to connect your ESP32 to Wi-Fi.</div>
 
     <form id="wifiForm">
       <div class="field">
         <div class="label"><span>SSID</span></div>
-        <input class="input" id="ssid" name="ssid" placeholder="Tên mạng Wi-Fi" required>
+        <input class="input" id="ssid" name="ssid" placeholder="Wi-Fi name (SSID)" required>
       </div>
 
       <div class="field">
         <div class="label"><span>Password</span></div>
         <div class="pw-row">
-          <input class="input" id="pass" name="password" type="password" placeholder="Mật khẩu" required>
-          <span class="toggle" id="showpw">Hiện</span>
+          <input class="input" id="pass" name="password" type="password" placeholder="Password" required>
+          <span class="toggle" id="showpw">Show</span>
         </div>
       </div>
 
       <div class="row">
-        <button class="btn primary" type="submit">⟶ Kết nối</button>
-        <button class="btn ghost" type="button" onclick="window.location='/'">← Quay lại</button>
+        <button class="btn primary" type="submit">⟶ Connect</button>
+        <button class="btn ghost" type="button" onclick="window.location='/'">← Back</button>
       </div>
     </form>
 
     <div id="msg" class="msg"></div>
   </div>
 
-  <div id="toast" class="toast">Đang gửi yêu cầu…</div>
+  <div id="toast" class="toast">Sending request…</div>
 
   <script>
     const form  = document.getElementById('wifiForm');
@@ -356,7 +351,7 @@ String settingsPage() {
     show.addEventListener('click', ()=>{
       const isPw = pw.type === 'password';
       pw.type = isPw ? 'text' : 'password';
-      show.textContent = isPw ? 'Ẩn' : 'Hiện';
+      show.textContent = isPw ? 'Hide' : 'Show';
     });
 
     form.addEventListener('submit', (e)=>{
@@ -364,25 +359,28 @@ String settingsPage() {
       const ssid = document.getElementById('ssid').value.trim();
       const pass = pw.value;
 
-      if(!ssid){ msgEl.textContent='SSID không được để trống'; msgEl.className='msg err'; return; }
+      if(!ssid){
+        msgEl.textContent='SSID must not be empty';
+        msgEl.className='msg err';
+        return;
+      }
 
-      showToast('Đang gửi yêu cầu…');
+      showToast('Sending request…');
       msgEl.textContent = '';
       msgEl.className = 'msg';
 
       fetch('/connect?ssid='+encodeURIComponent(ssid)+'&pass='+encodeURIComponent(pass))
         .then(r=>r.text())
         .then(text=>{
-          // Hiển thị phản hồi server
-          const ok = /success|connected|ok|thành công/i.test(text);
+          const ok = /success|connected|ok/i.test(text);
           msgEl.textContent = text;
           msgEl.className = 'msg ' + (ok ? 'ok' : 'err');
-          showToast(ok ? 'Đã gửi – vui lòng chờ ESP32 kết nối' : 'Kết nối thất bại');
+          showToast(ok ? 'Request sent – please wait for ESP32 to connect' : 'Connection failed');
         })
         .catch(()=>{
-          msgEl.textContent = 'Lỗi gửi yêu cầu!';
+          msgEl.textContent = 'Failed to send request!';
           msgEl.className = 'msg err';
-          showToast('Có lỗi mạng');
+          showToast('Network error');
         });
     });
   </script>
@@ -390,6 +388,7 @@ String settingsPage() {
 </html>
 )rawliteral";
 }
+
 
 
 // ========== Handlers ==========
@@ -412,9 +411,16 @@ void handleToggle() {
 }
 
 void handleSensors() {
-  String json = "{\"temp\":"+String(glob_temperature,1)+",\"hum\":"+String(glob_humidity,0)+"}";
+  float t = 0, h = 0;
+  if (xSemaphoreTake(DHT20_Mutex, 5)) {
+    t = dht20.temp;
+    h = dht20.humidity;
+    xSemaphoreGive(DHT20_Mutex);
+  }
+  String json = "{\"temp\":"+String(t,1)+",\"hum\":"+String(h,0)+"}";
   server.send(200, "application/json", json);
 }
+
 
 void handleSettings() { server.send(200, "text/html", settingsPage()); }
 
