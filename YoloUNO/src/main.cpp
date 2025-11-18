@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include "mainserver.h"
 #include "IOTClient.h"
+#include "LightSleep.h"
 #include "global.h"
 #define BUTTON_PIN 7
 // put function declarations here:
@@ -15,6 +16,8 @@ void setup() {
   Wire.begin();
 
   pinMode(BUTTON_PIN, INPUT);
+
+  setupAutoLightSleep();
 
   DHT20_Mutex = xSemaphoreCreateMutex();
   

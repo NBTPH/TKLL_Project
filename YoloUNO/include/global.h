@@ -20,5 +20,7 @@ typedef struct {
 #define MQTT_STATUS_TOPIC  "esp32/lab5/status"
 #define MQTT_SENSORS_TOPIC "esp32/lab5/sensors"
 #define MQTT_WEATHER_TOPIC "esp32/lab5/weather"
-
+// ===== Sleep =====
+#define SLEEP_DURATION_SECONDS  10
+#define SLEEP_DURATION_US SLEEP_DURATION_SECONDS*1000000
 #endif
