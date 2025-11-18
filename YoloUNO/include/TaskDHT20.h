@@ -3,10 +3,9 @@
 
 #include "global.h"  
 #include "Wire.h"
-#include "DHT20.h"  
+#include "DHT20.h"
 
-extern DHT20_data dht20;
-extern SemaphoreHandle_t DHT20_Mutex;
+void enable_I2C(void);
 
 void TaskDHT20(void *pvParameter);
 

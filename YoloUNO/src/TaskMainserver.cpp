@@ -1,7 +1,6 @@
-#include "mainserver.h"
-#include <WiFi.h>
-#include <WebServer.h>
 #include "global.h"
+#include "TaskMainserver.h"
+#include <WebServer.h>
 #include "TaskDHT20.h" 
 
 bool led1_state = false;
@@ -477,7 +476,7 @@ void WiFiEvent(WiFiEvent_t event) {
   }
 }
 
-void main_server_task(void *pvParameters){
+void TaskMainserver(void *pvParameters){
   pinMode(BOOT_PIN, INPUT_PULLUP);
   pinMode(LED1_PIN, OUTPUT);
   pinMode(LED2_PIN, OUTPUT);

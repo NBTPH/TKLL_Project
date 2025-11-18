@@ -1,19 +1,17 @@
+#include "global.h"
 #include "TaskDHT20.h"
 #include "TaskLCD.h"
 #include "TaskLED.h"
-#include <Arduino.h>
-#include "mainserver.h"
-#include "IOTClient.h"
-#include "LightSleep.h"
-#include "global.h"
+#include "TaskMainserver.h"
+#include "TaskIOTClient.h"
+#include "TaskLightSleep.h"
 #define BUTTON_PIN 7
 // put function declarations here:
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
-  Wire.setPins(GPIO_NUM_11, GPIO_NUM_12);
-  Wire.begin();
+  enable_I2C();
 
   pinMode(BUTTON_PIN, INPUT);
 
@@ -24,8 +22,8 @@ void setup() {
   xTaskCreate(TaskDHT20, "DHT20", 2048, NULL, 2, NULL);
   xTaskCreate(TaskLCD, "LCD", 2048, NULL, 2, NULL);
   xTaskCreate(TaskLED, "LED", 2048, NULL, 2, NULL);
-  xTaskCreate(main_server_task, "Main Server", 8192, NULL, 2, NULL);
-  xTaskCreate(mqtt_task,       "MQTT Task",   12288, NULL, 1, NULL);
+  xTaskCreate(TaskMainserver, "Main Server", 8192, NULL, 2, NULL);
+  xTaskCreate(TaskIOTClient, "MQTT Task",   12288, NULL, 1, NULL);
 }
 
 void loop() {

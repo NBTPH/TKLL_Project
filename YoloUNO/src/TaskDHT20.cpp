@@ -6,6 +6,11 @@ static QueueHandle_t tQueue = NULL;
 SemaphoreHandle_t DHT20_Mutex = NULL;
 DHT20_data dht20;
 
+void enable_I2C(void){
+    Wire.setPins(GPIO_NUM_11, GPIO_NUM_12);
+    Wire.begin();
+}
+
 void TaskDHT20(void *pvParameter){
     DHT20 DHT20;
     memset(&dht20, 0, sizeof(dht20));

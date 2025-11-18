@@ -1,5 +1,4 @@
-#include "LightSleep.h"
-#include "global.h"
+#include "TaskLightSleep.h"
 
 extern "C"{
     #include "esp_pm.h"

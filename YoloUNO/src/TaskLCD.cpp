@@ -18,16 +18,22 @@ void TaskLCD(void *pvParameter){
       xSemaphoreGive(DHT20_Mutex);
     }
 
-    String print_buffer;
-    print_buffer = "Temp: " + String(dht20_LOCAL.temp) + "\n" + "Humidity: " + String(dht20_LOCAL.humidity) + "\n";
-    Serial.print(print_buffer);
-    Serial.println();
+    // String print_buffer;
+    // print_buffer = "Temp: " + String(dht20_LOCAL.temp) + "\n" + "Humidity: " + String(dht20_LOCAL.humidity) + "\n";
+    // Serial.print(print_buffer);
+    // Serial.println();
 
     lcd.clear();
     lcd.setCursor(0, 0);
+    lcd.print("Temp");
+    lcd.setCursor(10, 0);
     lcd.print(dht20_LOCAL.temp);
+    lcd.print("C");
     lcd.setCursor(0, 1);
+    lcd.print("Humidity");
+    lcd.setCursor(10, 1);
     lcd.print(dht20_LOCAL.humidity);
+    lcd.print("%");
 
     vTaskDelay(1500);
   }

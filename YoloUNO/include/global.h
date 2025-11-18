@@ -1,13 +1,8 @@
 #ifndef __GLOBAL_H__
 #define __GLOBAL_H__
 
-#include "freertos/FreeRTOS.h"
+#include <Arduino.h>
 #include <semphr.h>
-// ===== Shared sensor values  =====
-typedef struct {
-    float temp;
-    float humidity;
-} DHT20_data;
 // ===== One source of truth for pins =====
 #define LED1_PIN 2
 #define LED2_PIN 3
@@ -23,4 +18,13 @@ typedef struct {
 // ===== Sleep =====
 #define SLEEP_DURATION_SECONDS  10
 #define SLEEP_DURATION_US SLEEP_DURATION_SECONDS*1000000
+
+//global struct and semaphore for sensor value
+typedef struct {
+    float temp;
+    float humidity;
+} DHT20_data;
+extern DHT20_data dht20;
+extern SemaphoreHandle_t DHT20_Mutex;
+
 #endif

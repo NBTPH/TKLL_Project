@@ -1,6 +1,6 @@
 #ifndef LIGHT_SLEEP_H
 #define LIGHT_SLEEP_H
-#include <Arduino.h>
+#include "global.h"
 
 void setupAutoLightSleep();
 

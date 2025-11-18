@@ -1,12 +1,4 @@
-#include "IOTClient.h"
-#include "global.h"
-#include <Arduino.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <PubSubClient.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
-#include "TaskDHT20.h" 
+#include "TaskIOTClient.h"
 // ====== HIVE MQ CREDENTIALS ======
 static const char* HIVEMQ_HOST = "556cf1d3be9443d8be5699268d114bb9.s1.eu.hivemq.cloud";
 static const int   HIVEMQ_PORT = 8883;
@@ -191,7 +183,7 @@ void mqtt_loop(){
   }
   vTaskDelay(pdMS_TO_TICKS(10));
 }
-void mqtt_task(void *){
+void TaskIOTClient(void *pvParameters){
   mqtt_setup();
   for(;;){
     mqtt_loop();
