@@ -15,7 +15,7 @@ tflite::ErrorReporter *error_reporter = nullptr;
 tflite::MicroInterpreter *interpreter = nullptr;
 TfLiteTensor *input = nullptr;
 TfLiteTensor *output = nullptr;
-
+SemaphoreHandle_t serialMutex;
 
 constexpr int kTensorArenaSize = 10 * 1024;  // Adjust to your model size
 uint8_t tensor_arena[kTensorArenaSize];
@@ -49,6 +49,7 @@ void setupTinyML(){
     output = interpreter->output(0);
 
     Serial.println("TensorFlow Lite Micro initialized on ESP32.");
+    serialMutex = xSemaphoreCreateMutex(); //use mutex for printing so that other tasks don't interrupt it before it's finished printing
 }
 
 void TaskTinyML(void *pvParameters)
@@ -64,26 +65,34 @@ void TaskTinyML(void *pvParameters)
             dht20_LOCAL = dht20;
             xSemaphoreGive(DHT20_Mutex);
         }
-        // Prepare input data (e.g., sensor readings)
-        // For a simple example, let's assume a single float input
-        input->data.f[0] = dht20_LOCAL.temp;
-        input->data.f[1] = dht20_LOCAL.humidity;
+        int input_temp = static_cast<int>(round(dht20_LOCAL.temp));
+        int input_humi = static_cast<int>(round(dht20_LOCAL.humidity));
 
-        // Run inference
+        String print_buffer;
+        if (xSemaphoreTake(serialMutex, 0) == pdTRUE){
+            print_buffer = "[TinyML] Input: " + String(input_temp) + "C " +  String(input_humi) + "%\n";
+            Serial.print(print_buffer);
+            Serial.flush();
+            xSemaphoreGive(serialMutex);
+        }
+
+        input->data.f[0] = input_temp;
+        input->data.f[1] = input_humi;
+
         TfLiteStatus invoke_status = interpreter->Invoke();
-        if (invoke_status != kTfLiteOk)
-        {
+        if (invoke_status != kTfLiteOk){
             error_reporter->Report("Invoke failed");
             return;
         }
 
-        // Get and process output
         float result = output->data.f[0];
-        String print_buffer;
-        print_buffer = "Inference result, how likely the data is abnormal: " + String(result) + "\n";
-        Serial.print(print_buffer);
-        Serial.println();
-        // Serial.println(result);
+
+        if (xSemaphoreTake(serialMutex, 0) == pdTRUE){
+            print_buffer = "Inference result, how likely the data is abnormal: " + String(result) + "\n\n";
+            Serial.print(print_buffer);
+            Serial.flush();
+            xSemaphoreGive(serialMutex);
+        }
 
         vTaskDelay(1000);
     }

@@ -13,13 +13,14 @@ int main(void){
     unsigned seed = chrono::system_clock::now().time_since_epoch().count();
     mt19937 gen(seed);
 
-    normal_distribution<float> temp_gen(27.5f, 8.0f); //generate temparture sample using normal distribution at 27.5C mean (average temp in HCMC) at variance 8 so we don't get too much samples out of range
-    normal_distribution<float> humi_gen(74.5f, 9.0f); //same with humidity with mean at 78% mean (average HCMC)
+    normal_distribution<float> temp_gen(27.5f, 8.5f); //generate temparture sample using normal distribution at 27.5C mean (average temp in HCMC) at variance 8 so we don't get too much samples out of range
+    normal_distribution<float> humi_gen(75.0f, 10.5f); //same with humidity with mean at 78% mean (average HCMC)
 
     int num_abnormal = 0;
     for(int i = 0; i < SAMPLE_NUM; i++){ //generate samples
-        float temp = temp_gen(gen);
-        float humi = humi_gen(gen);
+
+        int temp = static_cast<int>(round(temp_gen(gen)));
+        int humi = static_cast<int>(round(humi_gen(gen)));
 
         //Clamp generated values ecause the sensor can only sense from -40 to 80C
         if (temp < -40) temp = -40;

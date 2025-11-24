@@ -17,18 +17,18 @@ scaler.fit_transform(X)
 print("Means of each column (training data):", scaler.mean_)
 print("Standard deviations of each column (training data):", scaler.scale_)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1)
 
 # Simple classifier model
 model = tf.keras.Sequential([
     tf.keras.layers.Input(shape=(2,)),
-    # tf.keras.layers.Dense(16, activation='relu'),
+    tf.keras.layers.Dense(16, activation='relu'),
     tf.keras.layers.Dense(8, activation='relu'),
     tf.keras.layers.Dense(1, activation='sigmoid')
 ])
 
 model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
-model.fit(X_train, y_train, epochs=200, validation_data=(X_test, y_test))
+model.fit(X_train, y_train, epochs=100, validation_data=(X_test, y_test))
 model.save(PREFIX + '.h5')
 
 loss, accuracy = model.evaluate(X_test, y_test)

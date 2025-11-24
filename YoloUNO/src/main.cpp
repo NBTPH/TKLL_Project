@@ -19,7 +19,7 @@ void setup() {
   setupAutoLightSleep();
 
   DHT20_Mutex = xSemaphoreCreateMutex();
-  
+
   xTaskCreate(TaskDHT20, "DHT20", 2048, NULL, 2, NULL);
   xTaskCreate(TaskLCD, "LCD", 2048, NULL, 2, NULL);
   xTaskCreate(TaskLED, "LED", 2048, NULL, 2, NULL);
