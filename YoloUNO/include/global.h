@@ -4,8 +4,8 @@
 #include <Arduino.h>
 #include <semphr.h>
 // ===== One source of truth for pins =====
-#define LED1_PIN 2
-#define LED2_PIN 3
+#define LED1_PIN 6
+#define LED2_PIN 7
 #define BOOT_PIN 0
 #define NEO_NUM 1
 #define NEO_PIN 45
