@@ -24,7 +24,10 @@ typedef struct {
     float temp;
     float humidity;
 } DHT20_data;
+
 extern DHT20_data dht20;
 extern SemaphoreHandle_t DHT20_Mutex;
+extern float tinyml_prob;
+extern SemaphoreHandle_t TinyML_Mutex;
 
 #endif

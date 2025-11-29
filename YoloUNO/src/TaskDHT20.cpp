@@ -1,7 +1,6 @@
 //Task to communicate and read from DHT20 sensor   
 
 #include "TaskDHT20.h"
-#include "global.h"
 static QueueHandle_t tQueue = NULL;
 SemaphoreHandle_t DHT20_Mutex = NULL;
 DHT20_data dht20;

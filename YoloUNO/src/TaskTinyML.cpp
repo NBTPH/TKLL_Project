@@ -17,6 +17,9 @@ TfLiteTensor *input = nullptr;
 TfLiteTensor *output = nullptr;
 SemaphoreHandle_t serialMutex;
 
+float tinyml_prob = 0.0f;
+SemaphoreHandle_t TinyML_Mutex = NULL;
+
 constexpr int kTensorArenaSize = 10 * 1024;  // Adjust to your model size
 uint8_t tensor_arena[kTensorArenaSize];
 
@@ -86,6 +89,11 @@ void TaskTinyML(void *pvParameters)
         }
 
         float result = output->data.f[0];
+
+        if (TinyML_Mutex && xSemaphoreTake(TinyML_Mutex, 0) == pdTRUE) {
+            tinyml_prob = result;
+            xSemaphoreGive(TinyML_Mutex);
+        }
 
         if (xSemaphoreTake(serialMutex, 0) == pdTRUE){
             print_buffer = "Inference result, how likely the data is abnormal: " + String(result) + "\n\n";

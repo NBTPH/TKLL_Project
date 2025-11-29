@@ -29,6 +29,24 @@ String mainPage() {
       xSemaphoreGive(DHT20_Mutex);
   }
 
+  // TinyML prob
+  float ml = 0.0f;
+  if (TinyML_Mutex && xSemaphoreTake(TinyML_Mutex, pdMS_TO_TICKS(5))) {
+      ml = tinyml_prob;            
+      xSemaphoreGive(TinyML_Mutex);
+  }
+  int mlPercent = (int)(ml * 100.0f + 0.5f);
+
+  // chọn class ban đầu cho TinyML theo ngưỡng
+  String tinyClass = "sensor";
+  if (mlPercent < 30) {
+    tinyClass += " safe";
+  } else if (mlPercent < 70) {
+    tinyClass += " warn";
+  } else {
+    tinyClass += " danger";
+  }
+
   String ip = isAPMode ? WiFi.softAPIP().toString()
                        : WiFi.localIP().toString();
   String wifiName = isAPMode ? ssid : wifi_ssid;
@@ -36,7 +54,7 @@ String mainPage() {
   String led1Class = led1_state ? "btn on"  : "btn off";
   String led2Class = led2_state ? "btn on"  : "btn off";
 
-  return R"rawliteral(
+  String page = R"rawliteral(
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -99,6 +117,11 @@ String mainPage() {
     .toast{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px); opacity:0; transition:.25s; padding:10px 14px; border-radius:12px; background:#000c; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.35); font-weight:600 }
     .toast.show{ opacity:1; transform:translateX(-50%) }
     .i{ width:18px; height:18px; display:inline-block; vertical-align:middle } .i svg{ width:18px; height:18px }
+
+    /* màu nền cho TinyML */
+    .safe   { background:rgba(34,197,94,0.25) !important; }   /* <30% */
+    .warn   { background:rgba(234,179,8,0.35) !important; }   /* 30-70% */
+    .danger { background:rgba(239,68,68,0.35) !important; }   /* >70% */
   </style>
 </head>
 <body>
@@ -152,6 +175,19 @@ String mainPage() {
           </div>
           <div class="label">Humidity</div>
           <div class="value"><span id="hum">)rawliteral" + String(humidity,0) + R"rawliteral(</span><span class="unit">%</span></div>
+        </div>
+
+        <!-- TinyML -->
+        <div class=")rawliteral" + tinyClass + R"rawliteral(" id="tinymlBox" aria-live="polite">
+          <div class="i" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="6" rx="2" ry="2"/>
+              <rect x="3" y="14" width="18" height="6" rx="2" ry="2"/>
+              <path d="M8 17h2v2H8zM14 17h2v2h-2z"/>
+            </svg>
+          </div>
+          <div class="label">TinyML anomaly</div>
+          <div class="value"><span id="mlProb">)rawliteral" + String(mlPercent) + R"rawliteral(</span><span class="unit">%</span></div>
         </div>
 
         <!-- LED controls -->
@@ -218,6 +254,25 @@ String mainPage() {
         .then(d=>{
           document.getElementById('temp').textContent = Number(d.temp).toFixed(1);
           document.getElementById('hum').textContent  = Math.round(Number(d.hum));
+
+          if (typeof d.mlProb !== 'undefined') {
+            const prob = Number(d.mlProb);
+            const mlBox = document.getElementById('tinymlBox');
+            const mlProbEl = document.getElementById('mlProb');
+
+            mlProbEl.textContent = Math.round(prob);
+
+            // reset màu
+            mlBox.classList.remove('safe','warn','danger');
+            if (prob < 30) {
+              mlBox.classList.add('safe');
+            } else if (prob < 70) {
+              mlBox.classList.add('warn');
+            } else {
+              mlBox.classList.add('danger');
+            }
+          }
+
           toast('Sensor data updated');
         })
         .catch(()=>toast('Failed to load sensor data'));
@@ -229,9 +284,9 @@ String mainPage() {
 </body>
 </html>
 )rawliteral";
+
+  return page;
 }
-
-
 
 String settingsPage() {
   return R"rawliteral(
@@ -388,9 +443,8 @@ String settingsPage() {
 )rawliteral";
 }
 
-
-
 // ========== Handlers ==========
+
 void handleRoot() { server.send(200, "text/html", mainPage()); }
 
 void handleToggle() {
@@ -416,10 +470,19 @@ void handleSensors() {
     h = dht20.humidity;
     xSemaphoreGive(DHT20_Mutex);
   }
-  String json = "{\"temp\":"+String(t,1)+",\"hum\":"+String(h,0)+"}";
+
+  float ml = 0.0f;
+  if (TinyML_Mutex && xSemaphoreTake(TinyML_Mutex, 5)) {
+    ml = tinyml_prob;
+    xSemaphoreGive(TinyML_Mutex);
+  }
+  int mlPercent = (int)(ml * 100.0f + 0.5f);
+
+  String json = "{\"temp\":"+String(t,1)+
+                ",\"hum\":"+String(h,0)+
+                ",\"mlProb\":"+String(mlPercent)+"}";
   server.send(200, "application/json", json);
 }
-
 
 void handleSettings() { server.send(200, "text/html", settingsPage()); }
 
@@ -438,6 +501,7 @@ void handleConnect() {
 }
 
 // ========== WiFi ==========
+
 void setupServer() {
   server.on("/",        HTTP_GET, handleRoot);
   server.on("/toggle",  HTTP_GET, handleToggle);
