@@ -29,7 +29,6 @@ String mainPage() {
       xSemaphoreGive(DHT20_Mutex);
   }
 
-  // TinyML prob
   float ml = 0.0f;
   if (TinyML_Mutex && xSemaphoreTake(TinyML_Mutex, pdMS_TO_TICKS(5))) {
       ml = tinyml_prob;            
@@ -37,7 +36,6 @@ String mainPage() {
   }
   int mlPercent = (int)(ml * 100.0f + 0.5f);
 
-  // chọn class ban đầu cho TinyML theo ngưỡng
   String tinyClass = "sensor";
   if (mlPercent < 30) {
     tinyClass += " safe";
